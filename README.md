@@ -27,10 +27,6 @@ CSS
 JavaScript
 
 
-cd pos-system
-
-Open index.html in your browser to run the application.
-
 Usage
 
 View available products.
