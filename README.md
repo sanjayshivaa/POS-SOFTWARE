@@ -6,6 +6,8 @@ Overview
 
 The POS System helps businesses manage their daily sales digitally. It allows users to add products, calculate totals, process transactions, and maintain basic records of sales. The project is intended for learning purposes and demonstrates the core functionality of a retail billing system.
 
+
+
 Features
 
 Product listing and management
