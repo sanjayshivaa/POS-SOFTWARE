@@ -26,20 +26,6 @@ CSS
 
 JavaScript
 
-Project Structure
-pos-system
-│
-├── index.html
-├── style.css
-├── script.js
-└── README.md
-Installation
-
-Clone the repository
-
-git clone https://github.com/yourusername/pos-system.git
-
-Navigate to the project folder
 
 cd pos-system
 
