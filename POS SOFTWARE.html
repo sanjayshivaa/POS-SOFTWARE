@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Sell POS</title>
+<style>
+:root{
+ --bg:#ffffff;
+ --sidebar:#000000;
+ --panel:#161f2b;
+ --card:#1c2736;
+ --accent:#000000;
+ --text:#e8eefc;
+ --muted:#39414f;
+ --danger:#fb0000;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial;background:var(--bg);color:var(--text);display:flex;height:100vh}
+
+/* Sidebar */
+.sidebar{width:220px;background:var(--sidebar);padding:18px;display:flex;flex-direction:column}
+.logo{font-weight:700;font-size:20px;margin-bottom:20px}
+.navItem{padding:10px;border-radius:8px;color:var(--muted);cursor:pointer;margin-bottom:6px}
+.navItem.active,.navItem:hover{background:var(--accent);color:white}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{height:60px;background:var(--panel);display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid #222c3d}
+.search{background:#0f1722;border:none;border-radius:8px;padding:8px 10px;color:var(--text);width:260px}
+
+.content{flex:1;display:flex;overflow:hidden}
+.products{flex:1;padding:18px;overflow:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.card{background:var(--card);border-radius:12px;padding:10px;cursor:pointer;position:relative;transition:.15s}
+.card:hover{outline:1px solid var(--accent)}
+.card img{width:100%;height:100px;object-fit:cover;border-radius:8px;margin-bottom:6px}
+.price{color:var(--accent);font-weight:600}
+.del{position:absolute;top:6px;right:6px;background:var(--danger);border:none;color:white;border-radius:6px;font-size:11px;padding:2px 6px;cursor:pointer}
+
+/* Bill */
+.bill{width:340px;background:var(--panel);border-left:1px solid #222c3d;padding:16px;display:flex;flex-direction:column}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+td{padding:6px;border-bottom:1px solid #243146}
+.total{margin-top:auto;font-size:20px;font-weight:700}
+button{border:none;border-radius:8px;padding:9px 12px;margin-top:8px;font-weight:600;cursor:pointer}
+.primary{background:var(--accent);color:white}
+.danger{background:var(--danger);color:white}
+.small{font-size:12px;color:var(--muted)} </style>
+
+</head>
+<body>
+
+<div class="sidebar">
+<div class="logo">Quick Sell</div>
+<div class="navItem active">POS</div>
+<div class="navItem">Products</div>
+<div class="navItem">Analytics</div>
+</div>
+
+<div class="main">
+<div class="topbar">
+<input class="search" id="search" placeholder="Search product">
+<div id="userLabel">ADMIN</div>
+</div>
+
+<div class="content">
+
+<div class="products">
+<div class="grid" id="plist"></div>
+</div>
+
+<div class="bill" id="billPanel">
+<input id="custName" placeholder="Customer name">
+<input id="custPhone" placeholder="Phone" style="margin-top:6px">
+<table><tbody id="billRows"></tbody></table>
+<div class="total">₹ <span id="total">0</span></div>
+<button class="primary" onclick="printBill()">Print (F10)</button>
+<button class="primary" onclick="saveBill()">Save</button>
+</div>
+
+<!-- Products management panel (hidden until 'Products' clicked) -->
+<div class="bill" id="productsPanel" style="display:none">
+	<h3 class="small">Manage Products</h3>
+	<input id="pName" placeholder="Name" style="margin-top:6px">
+	<input id="pPrice" placeholder="Price" style="margin-top:6px">
+	<input id="pImg" placeholder="Image URL" style="margin-top:6px">
+	<button class="primary" id="addProductBtn">Add Product</button>
+	<div style="margin-top:10px" id="manageList"></div>
+</div>
+
+<!-- Analytics panel (hidden until 'Analytics' clicked) -->
+<div class="bill" id="analyticsPanel" style="display:none">
+	<h3 class="small">Analytics</h3>
+	<div id="analyticsContent" style="margin-top:10px"></div>
+</div>
+
+</div>
+</div>
+
+<script>
+let role = "admin";
+let products = JSON.parse(localStorage.getItem("products") || "[]");
+let bills = JSON.parse(localStorage.getItem("bills") || "[]");
+let bill = [];
+
+const search = document.getElementById('search');
+const plist = document.getElementById('plist');
+const billRows = document.getElementById('billRows');
+const totalEl = document.getElementById('total');
+
+function renderProducts(){
+	const q = (search.value || '').toLowerCase();
+	let html = "";
+	products.forEach((p,i)=>{
+		if(q && !p.name.toLowerCase().includes(q)) return;
+		html += `<div class="card" onclick="addBill(${i})">`
+				+ (role=="admin"?`<button class='del' onclick='event.stopPropagation();delProduct(${i})'>x</button>`:"")
+				+ `<img src="${p.img||"https://via.placeholder.com/150"}">`
+				+ `<div>${p.name}</div>`
+				+ `<div class="price">₹${p.price}</div>`
+				+ `</div>`;
+	});
+	plist.innerHTML = html;
+}
+
+search.addEventListener('input', renderProducts);
+
+function addBill(i){
+	let f = bill.find(b => b.i == i);
+	if(f) f.q++; else bill.push({i, q:1});
+	renderBill();
+}
+
+function renderBill(){
+	let html = "";
+	let tot = 0;
+	bill.forEach((b, idx) => {
+		let p = products[b.i];
+		let s = (Number(p.price) || 0) * b.q;
+		tot += s;
+		html += `<tr>`
+				 + `<td>${p.name}</td>`
+				 + `<td>${b.q}</td>`
+				 + `<td>${s}</td>`
+				 + `<td><button class='danger' onclick='del(${idx})'>x</button></td>`
+				 + `</tr>`;
+	});
+	billRows.innerHTML = html;
+	totalEl.innerText = tot;
+}
+
+function del(i){ bill.splice(i,1); renderBill(); }
+
+function delProduct(i){
+	products.splice(i,1);
+	localStorage.setItem("products", JSON.stringify(products));
+	renderProducts();
+}
+
+function saveBill(){
+	let tot = parseFloat(totalEl.innerText) || 0;
+	bills.push({items: bill, total: tot, date: new Date().toLocaleString()});
+	localStorage.setItem("bills", JSON.stringify(bills));
+	bill = [];
+	renderBill();
+	alert("Saved");
+}
+
+function printBill(){
+	let w = window.open("","PRINT");
+	let rows = "";
+	bill.forEach(b => {
+		let p = products[b.i];
+		rows += `<tr><td>${p.name}</td><td>${b.q}</td><td>${(Number(p.price)||0)*b.q}</td></tr>`;
+	});
+	w.document.write(`<h2>Quick Sell</h2><table>${rows}</table><h3>Total ₹${totalEl.innerText}</h3>`);
+	w.print();
+}
+
+document.addEventListener("keydown", e => {
+	if(e.key == "F10"){ e.preventDefault(); printBill(); }
+});
+
+// --- Sidebar navigation and extra panels ---
+const navItems = document.querySelectorAll('.navItem');
+const productsEl = document.querySelector('.products');
+const billEl = document.getElementById('billPanel');
+const productsPanelEl = document.getElementById('productsPanel');
+const analyticsPanelEl = document.getElementById('analyticsPanel');
+
+function switchView(name){
+	navItems.forEach(n=>n.classList.remove('active'));
+	const clicked = Array.from(navItems).find(n => n.innerText.trim().toLowerCase()===name.toLowerCase());
+	if(clicked) clicked.classList.add('active');
+	if(name.toLowerCase()==='pos'){
+		productsEl.style.display='block';
+		billEl.style.display='flex';
+		productsPanelEl.style.display='none';
+		analyticsPanelEl.style.display='none';
+	} else if(name.toLowerCase()==='products'){
+		productsEl.style.display='block';
+		billEl.style.display='none';
+		productsPanelEl.style.display='flex';
+		analyticsPanelEl.style.display='none';
+		renderManageList();
+	} else if(name.toLowerCase()==='analytics'){
+		productsEl.style.display='block';
+		billEl.style.display='none';
+		productsPanelEl.style.display='none';
+		analyticsPanelEl.style.display='flex';
+		renderAnalytics();
+	}
+}
+
+navItems.forEach(n=> n.addEventListener('click', ()=> switchView(n.innerText)));
+
+function addProductFromForm(){
+	const name = document.getElementById('pName').value.trim();
+	const price = parseFloat(document.getElementById('pPrice').value) || 0;
+	const img = document.getElementById('pImg').value.trim();
+	if(!name){ alert('Name required'); return; }
+	products.push({name, price, img});
+	localStorage.setItem('products', JSON.stringify(products));
+	renderProducts();
+	renderManageList();
+	document.getElementById('pName').value='';
+	document.getElementById('pPrice').value='';
+	document.getElementById('pImg').value='';
+}
+
+document.addEventListener('click', e => { if(e.target && e.target.id==='addProductBtn') addProductFromForm(); });
+
+function renderManageList(){
+	const el = document.getElementById('manageList');
+	el.innerHTML = products.map((p, idx)=>`<div style="margin-bottom:6px">${p.name} — ₹${p.price} <button class='danger' onclick='delProduct(${idx});renderManageList();'>Delete</button></div>`).join('') || '<div class="small">No products</div>';
+}
+
+function renderAnalytics(){
+	const content = document.getElementById('analyticsContent');
+	let totalSales = bills.reduce((s,b)=>s + (Number(b.total)||0),0);
+	content.innerHTML = `<div>Total bills: ${bills.length}</div><div>Total revenue: ₹${totalSales}</div>`;
+}
+
+renderProducts();
+</script>
+
+</body>
+</html>
